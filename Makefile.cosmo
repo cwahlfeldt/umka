@@ -1,37 +1,58 @@
 # Cosmopolitan build settings
-PREFIX ?= /usr/local
-BINDIR ?= $(PREFIX)/bin
-
-# Build paths
 BUILD_PATH = build.cosmo
 OBJ_PATH = $(BUILD_PATH)/obj
 
-# Compiler flags for static linking
-CFLAGS = -Os -static -fno-pie -no-pie -mno-red-zone -DUMKA_STATIC -Wall -Wno-format-security -Wno-implicit-function-declaration -fno-strict-aliasing -DUMKA_EXT_LIBS
+# Architecture paths
+AARCH64_PATH = $(BUILD_PATH)/lib/.aarch64
+X86_64_PATH = $(BUILD_PATH)/lib/.x86_64
+
+UMKA_LIB_STATIC = $(BUILD_PATH)/lib/libumka.a
+UMKA_LIB_AARCH64 = $(AARCH64_PATH)/libumka.a
+UMKA_LIB_X86_64 = $(X86_64_PATH)/libumka.a
+
+# Base flags
+CFLAGS = -Os -Wall -Wno-format-security -fno-strict-aliasing -DUMKA_EXT_LIBS
+STATIC_CFLAGS = $(CFLAGS) -DUMKA_STATIC -static -fno-pie -no-pie
 
 # Sources
-SRCS = $(wildcard src/*.c)
-OBJS = $(SRCS:src/%.c=$(OBJ_PATH)/%.o)
+SRCS = $(filter-out src/umka.c,$(wildcard src/*.c))
+OBJS_STATIC_AARCH64 = $(sort $(SRCS:src/%.c=$(OBJ_PATH)/.aarch64/%_static.o))
+OBJS_STATIC_X86_64 = $(sort $(SRCS:src/%.c=$(OBJ_PATH)/.x86_64/%_static.o))
+OBJS_STATIC = $(sort $(SRCS:src/%.c=$(OBJ_PATH)/%_static.o))
 
-# Main target
-all: $(BUILD_PATH)/umka.com
+all: $(UMKA_LIB_STATIC) $(UMKA_LIB_AARCH64) $(UMKA_LIB_X86_64)
 
-$(BUILD_PATH)/umka.com: $(OBJS)
+$(UMKA_LIB_STATIC): $(OBJS_STATIC)
+	@echo AR $@
 	@mkdir -p $(dir $@)
-	cosmocc $(CFLAGS) -o $@ $^
-	@chmod +x $@
+	ar rcs $@ $^
 
-$(OBJ_PATH)/%.o: src/%.c
+$(UMKA_LIB_AARCH64): $(OBJS_STATIC_AARCH64)
+	@echo AR $@
 	@mkdir -p $(dir $@)
-	cosmocc $(CFLAGS) -c $< -o $@
+	ar rcs $@ $^
+
+$(UMKA_LIB_X86_64): $(OBJS_STATIC_X86_64)
+	@echo AR $@
+	@mkdir -p $(dir $@)
+	ar rcs $@ $^
+
+$(OBJ_PATH)/%_static.o: src/%.c
+	@echo CC $@
+	@mkdir -p $(dir $@)
+	cosmocc $(STATIC_CFLAGS) -o $@ -c $^
+
+$(OBJ_PATH)/.aarch64/%_static.o: src/%.c
+	@echo CC $@
+	@mkdir -p $(dir $@)
+	cosmocc $(STATIC_CFLAGS) -DAARCH64 -march=armv8-a -o $@ -c $^
+
+$(OBJ_PATH)/.x86_64/%_static.o: src/%.c
+	@echo CC $@
+	@mkdir -p $(dir $@)
+	cosmocc $(STATIC_CFLAGS) -DX86_64 -Xx86_64 -o $@ -c $^
 
 clean:
-	rm -rf $(BUILD_PATH)
+	$(RM) $(BUILD_PATH) $(OBJ_PATH) -r
 
-install: all
-	install -D -m755 $(BUILD_PATH)/umka.com $(DESTDIR)$(BINDIR)/umka.com
-
-uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/umka.com
-
-.PHONY: all clean install uninstall
+.PHONY: all clean

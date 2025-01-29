@@ -1,6 +1,8 @@
 #ifndef UMKA_COSMO_H
 #define UMKA_COSMO_H
 
+#include <ctype.h>
+#include <libc/stdbool.h>
 #include <stdio.h>
 
 #ifdef __COSMOPOLITAN__
